@@ -169,6 +169,13 @@ let pipeSpeed = 3;
 const pipeSpawnInterval = 1800;
 let lastPipeSpawn = 0;
 
+// MONKEY MODE - activates at score 10
+let monkeyMode = false;
+let bullets = [];
+let enemyBirds = [];
+let lastEnemySpawn = 0;
+const enemySpawnInterval = 1500;
+
 // Audio context for sound effects
 let audioContext;
 
@@ -273,6 +280,17 @@ function playSound(type) {
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.15);
             break;
+
+        case 'shoot':
+            // Gunshot sound
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+            break;
     }
 }
 
@@ -352,6 +370,17 @@ function getChaosLevel() {
 // Trigger chaos events on score
 function triggerChaosEvents() {
     const chaosLevel = getChaosLevel();
+
+    // ACTIVATE MONKEY MODE at score 10!
+    if (score === 10 && !monkeyMode) {
+        monkeyMode = true;
+        createMemePopup(150, 200, 'MONKEY MODE!', true, true);
+        createMemePopup(100, 300, 'TAP TO SHOOT!', true, true);
+        triggerShake(true);
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => playSound('chaos'), i * 100);
+        }
+    }
 
     // Play Harry 6-7 sound every 3 pipes
     if (score >= nextHarrySoundScore) {
@@ -448,6 +477,11 @@ function resetGame() {
     scoreDisplay.textContent = '0';
     nextHarrySoundScore = 3; // Reset Harry sound trigger
     bgMusic.play().catch(e => {}); // Resume BGM on restart
+    // Reset monkey mode
+    monkeyMode = false;
+    bullets = [];
+    enemyBirds = [];
+    lastEnemySpawn = 0;
 }
 
 // Flap the bird
@@ -461,6 +495,10 @@ function flap() {
     } else if (gameState === 'playing') {
         bird.velocity = bird.flapStrength;
         playSound('flap');
+        // In monkey mode, also shoot!
+        if (monkeyMode) {
+            shoot();
+        }
     } else if (gameState === 'gameover') {
         gameOverScreen.classList.add('hidden');
         gameState = 'playing';
@@ -480,7 +518,7 @@ function checkCollision(pipe) {
     return false;
 }
 
-// Draw bird (Rainbow edition!)
+// Draw bird or MONKEY with gun!
 function drawBird() {
     ctx.save();
     ctx.translate(bird.x + bird.width / 2, bird.y + bird.height / 2);
@@ -492,35 +530,221 @@ function drawBird() {
     // Update rainbow hue
     rainbowHue = (rainbowHue + 3) % 360;
 
-    // Rainbow bird body
-    ctx.fillStyle = `hsl(${rainbowHue}, 100%, 50%)`;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, bird.width / 2, bird.height / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = `hsl(${(rainbowHue + 180) % 360}, 100%, 40%)`;
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    if (monkeyMode) {
+        // MONKEY WITH GUN MODE
+        // Monkey body (brown)
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bird.width / 2 + 5, bird.height / 2 + 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#5D2E0C';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-    // Eye
-    ctx.fillStyle = 'white';
-    ctx.beginPath();
-    ctx.arc(8, -5, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'black';
-    ctx.beginPath();
-    ctx.arc(10, -5, 4, 0, Math.PI * 2);
-    ctx.fill();
+        // Monkey face (lighter brown)
+        ctx.fillStyle = '#DEB887';
+        ctx.beginPath();
+        ctx.ellipse(5, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-    // Beak (also rainbow)
-    ctx.fillStyle = `hsl(${(rainbowHue + 60) % 360}, 100%, 50%)`;
-    ctx.beginPath();
-    ctx.moveTo(bird.width / 2 - 5, 0);
-    ctx.lineTo(bird.width / 2 + 10, 0);
-    ctx.lineTo(bird.width / 2 - 5, 8);
-    ctx.closePath();
-    ctx.fill();
+        // Eyes
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(2, -5, 5, 0, Math.PI * 2);
+        ctx.arc(10, -5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(3, -5, 2, 0, Math.PI * 2);
+        ctx.arc(11, -5, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crazy grin
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(6, 2, 6, 0, Math.PI);
+        ctx.stroke();
+
+        // Ears
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.arc(-15, -5, 8, 0, Math.PI * 2);
+        ctx.arc(20, -5, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // GUN
+        ctx.fillStyle = '#333';
+        ctx.fillRect(15, 5, 25, 8);
+        ctx.fillStyle = '#666';
+        ctx.fillRect(35, 3, 10, 12);
+
+        // Muzzle flash when shooting
+        if (bullets.length > 0 && bullets[bullets.length - 1].age < 5) {
+            ctx.fillStyle = '#ffff00';
+            ctx.beginPath();
+            ctx.arc(48, 9, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else {
+        // Rainbow bird body
+        ctx.fillStyle = `hsl(${rainbowHue}, 100%, 50%)`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bird.width / 2, bird.height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `hsl(${(rainbowHue + 180) % 360}, 100%, 40%)`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Eye
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(8, -5, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(10, -5, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Beak (also rainbow)
+        ctx.fillStyle = `hsl(${(rainbowHue + 60) % 360}, 100%, 50%)`;
+        ctx.beginPath();
+        ctx.moveTo(bird.width / 2 - 5, 0);
+        ctx.lineTo(bird.width / 2 + 10, 0);
+        ctx.lineTo(bird.width / 2 - 5, 8);
+        ctx.closePath();
+        ctx.fill();
+    }
 
     ctx.restore();
+}
+
+// Shoot bullet
+function shoot() {
+    if (!monkeyMode) return;
+    bullets.push({
+        x: bird.x + bird.width + 20,
+        y: bird.y + bird.height / 2,
+        speed: 10,
+        age: 0
+    });
+    playSound('shoot');
+}
+
+// Spawn enemy bird
+function spawnEnemyBird() {
+    enemyBirds.push({
+        x: canvas.width + 50,
+        y: 50 + Math.random() * (canvas.height - 150),
+        speed: 2 + Math.random() * 3,
+        size: 25 + Math.random() * 15,
+        hue: Math.random() * 360
+    });
+}
+
+// Draw enemy birds
+function drawEnemyBirds() {
+    enemyBirds.forEach(enemy => {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
+
+        // Evil bird body
+        ctx.fillStyle = `hsl(${enemy.hue}, 70%, 40%)`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, enemy.size, enemy.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Angry eyes
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(-5, -3, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(-4, -3, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Evil beak
+        ctx.fillStyle = '#ff6600';
+        ctx.beginPath();
+        ctx.moveTo(-enemy.size + 5, 0);
+        ctx.lineTo(-enemy.size - 10, 3);
+        ctx.lineTo(-enemy.size + 5, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    });
+}
+
+// Draw bullets
+function drawBullets() {
+    bullets.forEach(bullet => {
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.ellipse(bullet.x, bullet.y, 8, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff8800';
+        ctx.beginPath();
+        ctx.ellipse(bullet.x - 5, bullet.y, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Update monkey mode entities
+function updateMonkeyMode(timestamp) {
+    if (!monkeyMode) return;
+
+    // Spawn enemy birds
+    if (timestamp - lastEnemySpawn > enemySpawnInterval) {
+        spawnEnemyBird();
+        lastEnemySpawn = timestamp;
+    }
+
+    // Update bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].x += bullets[i].speed;
+        bullets[i].age++;
+        if (bullets[i].x > canvas.width + 20) {
+            bullets.splice(i, 1);
+        }
+    }
+
+    // Update enemy birds
+    for (let i = enemyBirds.length - 1; i >= 0; i--) {
+        enemyBirds[i].x -= enemyBirds[i].speed;
+        if (enemyBirds[i].x < -50) {
+            enemyBirds.splice(i, 1);
+        }
+    }
+
+    // Check bullet-enemy collisions
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        for (let j = enemyBirds.length - 1; j >= 0; j--) {
+            const b = bullets[i];
+            const e = enemyBirds[j];
+            if (b && e) {
+                const dx = b.x - e.x;
+                const dy = b.y - e.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < e.size + 10) {
+                    // Hit!
+                    bullets.splice(i, 1);
+                    enemyBirds.splice(j, 1);
+                    score += 2; // Bonus points for kills
+                    scoreDisplay.textContent = score;
+                    createMemePopup(e.x, e.y, 'GOTTEM!', true, true);
+                    triggerShake(false);
+                    playSound('chaos');
+                    break;
+                }
+            }
+        }
+    }
+
+    // Draw everything
+    drawBullets();
+    drawEnemyBirds();
 }
 
 // Draw pipe with meme text
@@ -636,6 +860,9 @@ function gameLoop(timestamp) {
                 drawPipe(pipe);
             }
         }
+
+        // Update monkey mode (enemies, bullets, etc.)
+        updateMonkeyMode(timestamp);
 
         // Check boundaries
         if (bird.y + bird.height > canvas.height - 20 || bird.y < 0) {
