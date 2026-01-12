@@ -382,12 +382,17 @@ function triggerChaosEvents() {
     // ACTIVATE MONKEY MODE at score 10!
     if (score === 10 && !monkeyMode) {
         monkeyMode = true;
+        // Clear all pipes - no more flappy bird!
+        pipes = [];
+        // Put monkey on the ground
+        bird.y = canvas.height - 100;
+        bird.velocity = 0;
         // Switch to monkey mode music!
         bgMusic.pause();
         monkeyBgm.currentTime = 0;
         monkeyBgm.play().catch(e => {});
-        createMemePopup(150, 200, 'MONKEY MODE!', true, true);
-        createMemePopup(100, 300, 'TAP TO SHOOT!', true, true);
+        createMemePopup(150, 150, 'MONKEY MODE!', true, true);
+        createMemePopup(120, 250, 'SHOOT THE BIRDS!', true, true);
         triggerShake(true);
         for (let i = 0; i < 5; i++) {
             setTimeout(() => playSound('chaos'), i * 100);
@@ -500,7 +505,7 @@ function resetGame() {
     lastEnemySpawn = 0;
 }
 
-// Flap the bird
+// Flap the bird (or shoot in monkey mode)
 function flap() {
     if (gameState === 'start') {
         initAudio();
@@ -509,11 +514,13 @@ function flap() {
         resetGame();
         lastPipeSpawn = performance.now();
     } else if (gameState === 'playing') {
-        bird.velocity = bird.flapStrength;
-        playSound('flap');
-        // In monkey mode, also shoot!
         if (monkeyMode) {
+            // In monkey mode, just shoot - no flapping!
             shoot();
+        } else {
+            // Normal flappy bird mode
+            bird.velocity = bird.flapStrength;
+            playSound('flap');
         }
     } else if (gameState === 'gameover') {
         gameOverScreen.classList.add('hidden');
@@ -547,59 +554,77 @@ function drawBird() {
     rainbowHue = (rainbowHue + 3) % 360;
 
     if (monkeyMode) {
-        // MONKEY WITH GUN MODE
-        // Monkey body (brown)
+        // MONKEY ON GROUND WITH GUN POINTING UP!
+        ctx.rotate(-bird.rotation * Math.PI / 180); // Cancel rotation for ground mode
+
+        // Monkey body (brown) - bigger for ground mode
         ctx.fillStyle = '#8B4513';
         ctx.beginPath();
-        ctx.ellipse(0, 0, bird.width / 2 + 5, bird.height / 2 + 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 10, 25, 30, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#5D2E0C';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Monkey head
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.arc(0, -25, 22, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
 
         // Monkey face (lighter brown)
         ctx.fillStyle = '#DEB887';
         ctx.beginPath();
-        ctx.ellipse(5, 0, 12, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, -20, 14, 12, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Eyes
+        // Eyes (looking up!)
         ctx.fillStyle = 'white';
         ctx.beginPath();
-        ctx.arc(2, -5, 5, 0, Math.PI * 2);
-        ctx.arc(10, -5, 5, 0, Math.PI * 2);
+        ctx.arc(-6, -28, 6, 0, Math.PI * 2);
+        ctx.arc(6, -28, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = 'black';
         ctx.beginPath();
-        ctx.arc(3, -5, 2, 0, Math.PI * 2);
-        ctx.arc(11, -5, 2, 0, Math.PI * 2);
+        ctx.arc(-6, -30, 3, 0, Math.PI * 2);
+        ctx.arc(6, -30, 3, 0, Math.PI * 2);
         ctx.fill();
 
         // Crazy grin
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(6, 2, 6, 0, Math.PI);
+        ctx.arc(0, -15, 8, 0.1 * Math.PI, 0.9 * Math.PI);
         ctx.stroke();
 
         // Ears
         ctx.fillStyle = '#8B4513';
         ctx.beginPath();
-        ctx.arc(-15, -5, 8, 0, Math.PI * 2);
-        ctx.arc(20, -5, 8, 0, Math.PI * 2);
+        ctx.arc(-20, -25, 10, 0, Math.PI * 2);
+        ctx.arc(20, -25, 10, 0, Math.PI * 2);
         ctx.fill();
 
-        // GUN
+        // Arms holding gun UP
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(-8, -50, 6, 30);
+        ctx.fillRect(2, -50, 6, 30);
+
+        // GUN pointing UP!
         ctx.fillStyle = '#333';
-        ctx.fillRect(15, 5, 25, 8);
+        ctx.fillRect(-6, -85, 12, 35);
         ctx.fillStyle = '#666';
-        ctx.fillRect(35, 3, 10, 12);
+        ctx.fillRect(-8, -90, 16, 10);
 
         // Muzzle flash when shooting
         if (bullets.length > 0 && bullets[bullets.length - 1].age < 5) {
             ctx.fillStyle = '#ffff00';
             ctx.beginPath();
-            ctx.arc(48, 9, 8, 0, Math.PI * 2);
+            ctx.arc(0, -100, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ff8800';
+            ctx.beginPath();
+            ctx.arc(0, -108, 8, 0, Math.PI * 2);
             ctx.fill();
         }
     } else {
@@ -635,25 +660,28 @@ function drawBird() {
     ctx.restore();
 }
 
-// Shoot bullet
+// Shoot bullet (upward in shooter mode!)
 function shoot() {
     if (!monkeyMode) return;
     bullets.push({
-        x: bird.x + bird.width + 20,
-        y: bird.y + bird.height / 2,
-        speed: 10,
+        x: bird.x + bird.width / 2,
+        y: bird.y - 70, // Start from gun muzzle
+        speedX: 0,
+        speedY: -15, // Shoot upward fast!
         age: 0
     });
     playSound('shoot');
 }
 
-// Spawn enemy bird
+// Spawn enemy bird (from sky in shooter mode!)
 function spawnEnemyBird() {
+    // Birds fly across the sky from different directions
+    const fromLeft = Math.random() > 0.5;
     enemyBirds.push({
-        x: canvas.width + 50,
-        y: 50 + Math.random() * (canvas.height - 150),
-        speed: 2 + Math.random() * 3,
-        size: 25 + Math.random() * 15,
+        x: fromLeft ? -50 : canvas.width + 50,
+        y: 50 + Math.random() * 250, // Upper portion of screen
+        speed: (2 + Math.random() * 3) * (fromLeft ? 1 : -1),
+        size: 30 + Math.random() * 20,
         hue: Math.random() * 360
     });
 }
@@ -693,16 +721,16 @@ function drawEnemyBirds() {
     });
 }
 
-// Draw bullets
+// Draw bullets (vertical for upward shooting)
 function drawBullets() {
     bullets.forEach(bullet => {
         ctx.fillStyle = '#ffff00';
         ctx.beginPath();
-        ctx.ellipse(bullet.x, bullet.y, 8, 4, 0, 0, Math.PI * 2);
+        ctx.ellipse(bullet.x, bullet.y, 4, 10, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#ff8800';
         ctx.beginPath();
-        ctx.ellipse(bullet.x - 5, bullet.y, 5, 3, 0, 0, Math.PI * 2);
+        ctx.ellipse(bullet.x, bullet.y + 8, 3, 6, 0, 0, Math.PI * 2);
         ctx.fill();
     });
 }
@@ -711,25 +739,27 @@ function drawBullets() {
 function updateMonkeyMode(timestamp) {
     if (!monkeyMode) return;
 
-    // Spawn enemy birds
-    if (timestamp - lastEnemySpawn > enemySpawnInterval) {
+    // Spawn enemy birds more frequently
+    if (timestamp - lastEnemySpawn > 1000) {
         spawnEnemyBird();
         lastEnemySpawn = timestamp;
     }
 
-    // Update bullets
+    // Update bullets (shoot upward!)
     for (let i = bullets.length - 1; i >= 0; i--) {
-        bullets[i].x += bullets[i].speed;
+        bullets[i].y += bullets[i].speedY;
         bullets[i].age++;
-        if (bullets[i].x > canvas.width + 20) {
+        // Remove if off screen (top)
+        if (bullets[i].y < -20) {
             bullets.splice(i, 1);
         }
     }
 
-    // Update enemy birds
+    // Update enemy birds (fly horizontally across sky)
     for (let i = enemyBirds.length - 1; i >= 0; i--) {
-        enemyBirds[i].x -= enemyBirds[i].speed;
-        if (enemyBirds[i].x < -50) {
+        enemyBirds[i].x += enemyBirds[i].speed;
+        // Remove if off screen either side
+        if (enemyBirds[i].x < -100 || enemyBirds[i].x > canvas.width + 100) {
             enemyBirds.splice(i, 1);
         }
     }
@@ -841,47 +871,57 @@ function gameLoop(timestamp) {
     drawBackground();
 
     if (gameState === 'playing') {
-        // Update bird
-        bird.velocity += bird.gravity;
-        bird.y += bird.velocity;
+        if (monkeyMode) {
+            // SHOOTER MODE - monkey on ground, shoot birds!
+            bird.x = canvas.width / 2 - bird.width / 2; // Center monkey
+            bird.y = canvas.height - 80; // Keep monkey on ground
+            bird.velocity = 0;
+            bird.rotation = 0;
+            // No pipes in shooter mode!
+        } else {
+            // FLAPPY BIRD MODE
+            // Update bird
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
 
-        // Spawn pipes
-        if (timestamp - lastPipeSpawn > pipeSpawnInterval / (1 + score * 0.02)) {
-            spawnPipe();
-            lastPipeSpawn = timestamp;
-        }
-
-        // Update and draw pipes
-        for (let i = pipes.length - 1; i >= 0; i--) {
-            const pipe = pipes[i];
-            pipe.x -= pipeSpeed;
-
-            // Check scoring
-            if (!pipe.scored && pipe.x + pipeWidth < bird.x) {
-                pipe.scored = true;
-                score++;
-                scoreDisplay.textContent = score;
-                triggerChaosEvents();
+            // Spawn pipes
+            if (timestamp - lastPipeSpawn > pipeSpawnInterval / (1 + score * 0.02)) {
+                spawnPipe();
+                lastPipeSpawn = timestamp;
             }
 
-            // Check collision
-            if (checkCollision(pipe)) {
-                gameOver();
-            }
+            // Update and draw pipes
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                const pipe = pipes[i];
+                pipe.x -= pipeSpeed;
 
-            // Remove off-screen pipes
-            if (pipe.x + pipeWidth < 0) {
-                pipes.splice(i, 1);
-            } else {
-                drawPipe(pipe);
+                // Check scoring
+                if (!pipe.scored && pipe.x + pipeWidth < bird.x) {
+                    pipe.scored = true;
+                    score++;
+                    scoreDisplay.textContent = score;
+                    triggerChaosEvents();
+                }
+
+                // Check collision
+                if (checkCollision(pipe)) {
+                    gameOver();
+                }
+
+                // Remove off-screen pipes
+                if (pipe.x + pipeWidth < 0) {
+                    pipes.splice(i, 1);
+                } else {
+                    drawPipe(pipe);
+                }
             }
         }
 
         // Update monkey mode (enemies, bullets, etc.)
         updateMonkeyMode(timestamp);
 
-        // Check boundaries
-        if (bird.y + bird.height > canvas.height - 20 || bird.y < 0) {
+        // Check boundaries (only in flappy mode)
+        if (!monkeyMode && (bird.y + bird.height > canvas.height - 20 || bird.y < 0)) {
             gameOver();
         }
     }
