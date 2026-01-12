@@ -187,6 +187,17 @@ let paddle = { x: 0, y: 0, width: 80, height: 15 };
 let ball = { x: 0, y: 0, speedX: 4, speedY: -4, radius: 10 };
 let pongScore = 0;
 
+// PINBALL MODE - activates at score 110
+let pinballMode = false;
+let flippers = {
+    left: { x: 80, y: 520, angle: 0.3, length: 60, active: false },
+    right: { x: 320, y: 520, angle: Math.PI - 0.3, length: 60, active: false }
+};
+let bumpers = [];
+let pinballBall = { x: 200, y: 100, vx: 0, vy: 0, radius: 12 };
+let pinballScore = 0;
+const PINBALL_GRAVITY = 0.3;
+
 // Audio context for sound effects
 let audioContext;
 
@@ -538,6 +549,10 @@ function resetGame() {
     // Reset pong mode
     pongMode = false;
     pongScore = 0;
+    // Reset pinball mode
+    pinballMode = false;
+    pinballScore = 0;
+    bumpers = [];
     // Reset movement
     movingLeft = false;
     movingRight = false;
@@ -991,8 +1006,19 @@ function updatePongMode() {
         playSound('score');
         createMemePopup(ball.x, ball.y, '+1', false, true);
 
-        // Speed up ball slightly
-        ball.speedY *= 1.05;
+        // Check for PINBALL MODE at score 110!
+        if (score >= 110 && !pinballMode) {
+            activatePinballMode();
+            return;
+        }
+
+        // Speed up ball more noticeably each hit!
+        ball.speedY *= 1.08;
+        ball.speedX *= 1.05;
+
+        // Cap the speed so it doesn't get impossible
+        if (Math.abs(ball.speedY) > 15) ball.speedY = ball.speedY > 0 ? 15 : -15;
+        if (Math.abs(ball.speedX) > 12) ball.speedX = ball.speedX > 0 ? 12 : -12;
     }
 
     // Ball falls below paddle - GAME OVER
@@ -1036,6 +1062,265 @@ function drawPongMode() {
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 16px Arial';
     ctx.fillText('Hits: ' + pongScore, canvas.width / 2, 105);
+}
+
+// Activate pinball mode
+function activatePinballMode() {
+    pinballMode = true;
+    pongMode = false;
+    initPinballMode();
+    createMemePopup(100, 200, 'PINBALL MODE!!!', true, true);
+    createMemePopup(80, 300, 'USE ARROWS TO FLIP!', true, true);
+    triggerShake(true);
+    for (let i = 0; i < 10; i++) {
+        setTimeout(() => playSound('chaos'), i * 60);
+    }
+}
+
+// Initialize pinball mode
+function initPinballMode() {
+    // Reset ball to top
+    pinballBall = {
+        x: 200 + (Math.random() - 0.5) * 100,
+        y: 80,
+        vx: (Math.random() - 0.5) * 4,
+        vy: 2,
+        radius: 14
+    };
+
+    // Create bumpers
+    bumpers = [
+        { x: 120, y: 180, radius: 30, hits: 0 },
+        { x: 280, y: 180, radius: 30, hits: 0 },
+        { x: 200, y: 120, radius: 25, hits: 0 },
+        { x: 100, y: 300, radius: 25, hits: 0 },
+        { x: 300, y: 300, radius: 25, hits: 0 },
+        { x: 200, y: 250, radius: 35, hits: 0 },
+        { x: 150, y: 380, radius: 20, hits: 0 },
+        { x: 250, y: 380, radius: 20, hits: 0 }
+    ];
+
+    // Reset flippers
+    flippers.left = { x: 80, y: 530, angle: 0.4, length: 70, active: false };
+    flippers.right = { x: 320, y: 530, angle: Math.PI - 0.4, length: 70, active: false };
+
+    pinballScore = 0;
+}
+
+// Update pinball mode
+function updatePinballMode() {
+    // Apply gravity
+    pinballBall.vy += PINBALL_GRAVITY;
+
+    // Move ball
+    pinballBall.x += pinballBall.vx;
+    pinballBall.y += pinballBall.vy;
+
+    // Wall collisions
+    if (pinballBall.x - pinballBall.radius < 0) {
+        pinballBall.x = pinballBall.radius;
+        pinballBall.vx *= -0.8;
+        playSound('flap');
+    }
+    if (pinballBall.x + pinballBall.radius > canvas.width) {
+        pinballBall.x = canvas.width - pinballBall.radius;
+        pinballBall.vx *= -0.8;
+        playSound('flap');
+    }
+    if (pinballBall.y - pinballBall.radius < 0) {
+        pinballBall.y = pinballBall.radius;
+        pinballBall.vy *= -0.8;
+        playSound('flap');
+    }
+
+    // Bumper collisions
+    for (let bumper of bumpers) {
+        const dx = pinballBall.x - bumper.x;
+        const dy = pinballBall.y - bumper.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < pinballBall.radius + bumper.radius) {
+            // Bounce off bumper
+            const angle = Math.atan2(dy, dx);
+            const speed = Math.sqrt(pinballBall.vx * pinballBall.vx + pinballBall.vy * pinballBall.vy);
+            pinballBall.vx = Math.cos(angle) * (speed + 5);
+            pinballBall.vy = Math.sin(angle) * (speed + 5);
+
+            // Push ball out of bumper
+            pinballBall.x = bumper.x + Math.cos(angle) * (bumper.radius + pinballBall.radius + 2);
+            pinballBall.y = bumper.y + Math.sin(angle) * (bumper.radius + pinballBall.radius + 2);
+
+            // Score!
+            bumper.hits++;
+            pinballScore += 10;
+            score++;
+            scoreDisplay.textContent = score;
+            createMemePopup(bumper.x, bumper.y, '+10', false, true);
+            playSound('score');
+            triggerShake(false);
+        }
+    }
+
+    // Flipper collisions and control
+    updateFlippers();
+
+    // Check for ball falling out (game over)
+    if (pinballBall.y > canvas.height + 50) {
+        createMemePopup(200, 300, 'BALL LOST!', true, true);
+        gameOver();
+        return;
+    }
+
+    // Cap velocity
+    const maxSpeed = 18;
+    if (Math.abs(pinballBall.vx) > maxSpeed) pinballBall.vx = pinballBall.vx > 0 ? maxSpeed : -maxSpeed;
+    if (Math.abs(pinballBall.vy) > maxSpeed) pinballBall.vy = pinballBall.vy > 0 ? maxSpeed : -maxSpeed;
+
+    // Draw everything
+    drawPinballMode();
+}
+
+// Update flippers
+function updateFlippers() {
+    // Left flipper - controlled by left arrow
+    const leftTarget = flippers.left.active ? -0.6 : 0.4;
+    flippers.left.angle += (leftTarget - flippers.left.angle) * 0.4;
+
+    // Right flipper - controlled by right arrow
+    const rightTarget = flippers.right.active ? Math.PI + 0.6 : Math.PI - 0.4;
+    flippers.right.angle += (rightTarget - flippers.right.angle) * 0.4;
+
+    // Check collision with left flipper
+    checkFlipperCollision(flippers.left, true);
+    // Check collision with right flipper
+    checkFlipperCollision(flippers.right, false);
+}
+
+// Check flipper collision
+function checkFlipperCollision(flipper, isLeft) {
+    const endX = flipper.x + Math.cos(flipper.angle) * flipper.length;
+    const endY = flipper.y + Math.sin(flipper.angle) * flipper.length;
+
+    // Simple line-circle collision
+    const dx = endX - flipper.x;
+    const dy = endY - flipper.y;
+    const fx = flipper.x - pinballBall.x;
+    const fy = flipper.y - pinballBall.y;
+
+    const a = dx * dx + dy * dy;
+    const b = 2 * (fx * dx + fy * dy);
+    const c = fx * fx + fy * fy - pinballBall.radius * pinballBall.radius;
+
+    let discriminant = b * b - 4 * a * c;
+    if (discriminant >= 0) {
+        discriminant = Math.sqrt(discriminant);
+        const t1 = (-b - discriminant) / (2 * a);
+        const t2 = (-b + discriminant) / (2 * a);
+
+        if ((t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1)) {
+            // Collision! Bounce the ball
+            const flipperSpeed = flipper.active ? 15 : 3;
+            const bounceAngle = flipper.angle - Math.PI / 2;
+
+            pinballBall.vx = Math.cos(bounceAngle) * flipperSpeed * (isLeft ? 1.2 : -1.2);
+            pinballBall.vy = -Math.abs(Math.sin(bounceAngle) * flipperSpeed) - 5;
+
+            // Push ball up
+            pinballBall.y = flipper.y - pinballBall.radius - 10;
+
+            playSound('flap');
+            if (flipper.active) {
+                createMemePopup(pinballBall.x, pinballBall.y, 'FLIP!', false, true);
+            }
+        }
+    }
+}
+
+// Draw pinball mode
+function drawPinballMode() {
+    // Draw side walls (angled)
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.moveTo(0, 450);
+    ctx.lineTo(50, 550);
+    ctx.lineTo(0, 550);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(canvas.width, 450);
+    ctx.lineTo(canvas.width - 50, 550);
+    ctx.lineTo(canvas.width, 550);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw bumpers
+    for (let bumper of bumpers) {
+        const hue = (rainbowHue + bumper.hits * 30) % 360;
+        ctx.beginPath();
+        ctx.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Inner glow
+        ctx.beginPath();
+        ctx.arc(bumper.x, bumper.y, bumper.radius * 0.6, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${hue}, 100%, 70%)`;
+        ctx.fill();
+    }
+
+    // Draw flippers
+    drawFlipper(flippers.left, '#ff00ff');
+    drawFlipper(flippers.right, '#00ffff');
+
+    // Draw ball (chrome/silver look)
+    ctx.beginPath();
+    ctx.arc(pinballBall.x, pinballBall.y, pinballBall.radius, 0, Math.PI * 2);
+    const ballGradient = ctx.createRadialGradient(
+        pinballBall.x - 4, pinballBall.y - 4, 0,
+        pinballBall.x, pinballBall.y, pinballBall.radius
+    );
+    ballGradient.addColorStop(0, '#ffffff');
+    ballGradient.addColorStop(0.3, '#cccccc');
+    ballGradient.addColorStop(1, '#666666');
+    ctx.fillStyle = ballGradient;
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw "PINBALL MODE" text
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('PINBALL MODE!', canvas.width / 2, 50);
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('Bumper Hits: ' + pinballScore, canvas.width / 2, 75);
+}
+
+// Draw a flipper
+function drawFlipper(flipper, color) {
+    const endX = flipper.x + Math.cos(flipper.angle) * flipper.length;
+    const endY = flipper.y + Math.sin(flipper.angle) * flipper.length;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(flipper.x, flipper.y);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Flipper pivot
+    ctx.beginPath();
+    ctx.arc(flipper.x, flipper.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.restore();
 }
 
 // Draw pipe with meme text
@@ -1116,7 +1401,13 @@ function gameLoop(timestamp) {
     drawBackground();
 
     if (gameState === 'playing') {
-        if (pongMode) {
+        if (pinballMode) {
+            // PINBALL MODE!
+            // Use movement buttons for flippers
+            flippers.left.active = movingLeft;
+            flippers.right.active = movingRight;
+            updatePinballMode();
+        } else if (pongMode) {
             // PING PONG MODE!
             updatePongMode();
         } else if (monkeyMode) {
@@ -1180,8 +1471,10 @@ function gameLoop(timestamp) {
         }
     }
 
-    // Draw bird
-    drawBird();
+    // Draw bird (but not in pong or pinball mode!)
+    if (!pongMode && !pinballMode) {
+        drawBird();
+    }
 
     requestAnimationFrame(gameLoop);
 }
