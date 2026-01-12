@@ -179,7 +179,7 @@ const enemySpawnInterval = 1500;
 // Monkey movement
 let movingLeft = false;
 let movingRight = false;
-const monkeySpeed = 5;
+const monkeySpeed = 8; // Faster for mobile!
 
 // PING PONG MODE - activates at score 100
 let pongMode = false;
@@ -408,9 +408,10 @@ function triggerChaosEvents() {
         for (let i = 0; i < 5; i++) {
             setTimeout(() => playSound('chaos'), i * 100);
         }
-        // Show movement buttons
+        // Show movement buttons and fire button
         document.getElementById('move-left').classList.remove('hidden');
         document.getElementById('move-right').classList.remove('hidden');
+        document.getElementById('fire-btn').classList.remove('hidden');
     }
 
     // ACTIVATE PONG MODE at score 100!
@@ -540,9 +541,10 @@ function resetGame() {
     // Reset movement
     movingLeft = false;
     movingRight = false;
-    // Hide movement buttons
+    // Hide movement buttons and fire button
     document.getElementById('move-left').classList.add('hidden');
     document.getElementById('move-right').classList.add('hidden');
+    document.getElementById('fire-btn').classList.add('hidden');
 }
 
 // Flap the bird (or shoot in monkey mode)
@@ -896,6 +898,11 @@ function updateMonkeyMode(timestamp) {
                     createMemePopup(e.x, e.y, 'GOTTEM!', true, true);
                     triggerShake(false);
                     playSound('chaos');
+
+                    // Check for PONG MODE at score 100!
+                    if (score >= 100 && !pongMode) {
+                        activatePongMode();
+                    }
                     break;
                 }
             }
@@ -907,30 +914,49 @@ function updateMonkeyMode(timestamp) {
     drawEnemyBirds();
 }
 
+// Activate pong mode
+function activatePongMode() {
+    pongMode = true;
+    monkeyMode = false;
+    // Clear shooter mode stuff
+    bullets = [];
+    enemyBirds = [];
+    // Hide fire button (not needed in pong)
+    document.getElementById('fire-btn').classList.add('hidden');
+    // Initialize pong
+    initPongMode();
+    createMemePopup(100, 200, 'PONG MODE!!!', true, true);
+    createMemePopup(120, 300, 'DONT LET IT DROP!', true, true);
+    triggerShake(true);
+    for (let i = 0; i < 8; i++) {
+        setTimeout(() => playSound('chaos'), i * 80);
+    }
+}
+
 // Initialize ping pong mode
 function initPongMode() {
-    paddle.width = 80;
-    paddle.height = 15;
+    paddle.width = 100; // Bigger paddle for mobile!
+    paddle.height = 18;
     paddle.x = canvas.width / 2 - paddle.width / 2;
     paddle.y = canvas.height - 50;
 
     ball.x = canvas.width / 2;
     ball.y = canvas.height / 2;
-    ball.speedX = (Math.random() > 0.5 ? 1 : -1) * 5;
-    ball.speedY = -5;
-    ball.radius = 12;
+    ball.speedX = (Math.random() > 0.5 ? 1 : -1) * 4;
+    ball.speedY = -4; // Slightly slower start
+    ball.radius = 14; // Bigger ball
 
     pongScore = 0;
 }
 
 // Update ping pong mode
 function updatePongMode() {
-    // Move paddle with movement controls
+    // Move paddle with movement controls - fast for mobile!
     if (movingLeft && paddle.x > 0) {
-        paddle.x -= 8;
+        paddle.x -= 12;
     }
     if (movingRight && paddle.x < canvas.width - paddle.width) {
-        paddle.x += 8;
+        paddle.x += 12;
     }
 
     // Update ball position
@@ -1319,6 +1345,18 @@ moveRightBtn.addEventListener('touchend', (e) => {
     e.stopPropagation();
     movingRight = false;
 });
+
+// Fire button for shooter mode
+const fireBtn = document.getElementById('fire-btn');
+fireBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (monkeyMode) shoot();
+});
+fireBtn.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (monkeyMode) shoot();
+}, { passive: false });
 
 // Start game loop
 requestAnimationFrame(gameLoop);
