@@ -195,6 +195,12 @@ bgMusic.preload = 'auto';
 bgMusic.loop = true;
 bgMusic.volume = 0.15; // Much lower BGM so sound effects stand out
 
+// Monkey mode music
+const monkeyBgm = new Audio('sounds/monkey-bgm.mp3');
+monkeyBgm.preload = 'auto';
+monkeyBgm.loop = true;
+monkeyBgm.volume = 0.3;
+
 // Play the 6-7 Harry sound
 function playHarrySound() {
     harrySound.currentTime = 0;
@@ -204,6 +210,7 @@ function playHarrySound() {
 // Play death sound
 function playDeathSound() {
     bgMusic.pause(); // Pause BGM so death sound is clear
+    monkeyBgm.pause(); // Also pause monkey BGM
     deathSound.currentTime = 0;
     deathSound.play().catch(e => console.log('Audio play failed:', e));
 }
@@ -222,6 +229,7 @@ function initAudio() {
     harrySound.load();
     deathSound.load();
     bgMusic.load();
+    monkeyBgm.load();
 
     // Start background music
     startBgMusic();
@@ -374,6 +382,10 @@ function triggerChaosEvents() {
     // ACTIVATE MONKEY MODE at score 10!
     if (score === 10 && !monkeyMode) {
         monkeyMode = true;
+        // Switch to monkey mode music!
+        bgMusic.pause();
+        monkeyBgm.currentTime = 0;
+        monkeyBgm.play().catch(e => {});
         createMemePopup(150, 200, 'MONKEY MODE!', true, true);
         createMemePopup(100, 300, 'TAP TO SHOOT!', true, true);
         triggerShake(true);
@@ -476,7 +488,11 @@ function resetGame() {
     lastPipeSpawn = 0;
     scoreDisplay.textContent = '0';
     nextHarrySoundScore = 3; // Reset Harry sound trigger
-    bgMusic.play().catch(e => {}); // Resume BGM on restart
+    // Reset music to normal BGM
+    monkeyBgm.pause();
+    monkeyBgm.currentTime = 0;
+    bgMusic.currentTime = 0;
+    bgMusic.play().catch(e => {}); // Resume normal BGM on restart
     // Reset monkey mode
     monkeyMode = false;
     bullets = [];
