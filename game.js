@@ -196,6 +196,7 @@ function playHarrySound() {
 
 // Play death sound
 function playDeathSound() {
+    bgMusic.pause(); // Pause BGM so death sound is clear
     deathSound.currentTime = 0;
     deathSound.play().catch(e => console.log('Audio play failed:', e));
 }
@@ -446,6 +447,7 @@ function resetGame() {
     lastPipeSpawn = 0;
     scoreDisplay.textContent = '0';
     nextHarrySoundScore = 3; // Reset Harry sound trigger
+    bgMusic.play().catch(e => {}); // Resume BGM on restart
 }
 
 // Flap the bird
