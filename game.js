@@ -179,12 +179,13 @@ let nextHarrySoundScore = 3; // Trigger every 3 pipes
 
 const deathSound = new Audio('sounds/Fahhh.mp3');
 deathSound.preload = 'auto';
+deathSound.volume = 1.0; // Max volume for death sound
 
 // Background music
 const bgMusic = new Audio('sounds/bgm.mp3');
 bgMusic.preload = 'auto';
 bgMusic.loop = true;
-bgMusic.volume = 0.5;
+bgMusic.volume = 0.3; // Lower BGM so sound effects stand out
 
 // Play the 6-7 Harry sound
 function playHarrySound() {
@@ -549,7 +550,7 @@ function drawPipe(pipe) {
     // Meme text on pipe
     ctx.save();
     ctx.fillStyle = pipe.color;
-    ctx.font = 'bold 14px Comic Sans MS, cursive';
+    ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.shadowColor = 'black';
     ctx.shadowBlur = 4;
