@@ -176,6 +176,17 @@ let enemyBirds = [];
 let lastEnemySpawn = 0;
 const enemySpawnInterval = 1500;
 
+// Monkey movement
+let movingLeft = false;
+let movingRight = false;
+const monkeySpeed = 5;
+
+// PING PONG MODE - activates at score 100
+let pongMode = false;
+let paddle = { x: 0, y: 0, width: 80, height: 15 };
+let ball = { x: 0, y: 0, speedX: 4, speedY: -4, radius: 10 };
+let pongScore = 0;
+
 // Audio context for sound effects
 let audioContext;
 
@@ -397,6 +408,26 @@ function triggerChaosEvents() {
         for (let i = 0; i < 5; i++) {
             setTimeout(() => playSound('chaos'), i * 100);
         }
+        // Show movement buttons
+        document.getElementById('move-left').classList.remove('hidden');
+        document.getElementById('move-right').classList.remove('hidden');
+    }
+
+    // ACTIVATE PONG MODE at score 100!
+    if (score === 100 && !pongMode) {
+        pongMode = true;
+        monkeyMode = false;
+        // Clear shooter mode stuff
+        bullets = [];
+        enemyBirds = [];
+        // Initialize pong
+        initPongMode();
+        createMemePopup(100, 200, 'PONG MODE!!!', true, true);
+        createMemePopup(120, 300, 'DONT LET IT DROP!', true, true);
+        triggerShake(true);
+        for (let i = 0; i < 8; i++) {
+            setTimeout(() => playSound('chaos'), i * 80);
+        }
     }
 
     // Play Harry 6-7 sound every 3 pipes
@@ -503,6 +534,15 @@ function resetGame() {
     bullets = [];
     enemyBirds = [];
     lastEnemySpawn = 0;
+    // Reset pong mode
+    pongMode = false;
+    pongScore = 0;
+    // Reset movement
+    movingLeft = false;
+    movingRight = false;
+    // Hide movement buttons
+    document.getElementById('move-left').classList.add('hidden');
+    document.getElementById('move-right').classList.add('hidden');
 }
 
 // Flap the bird (or shoot in monkey mode)
@@ -867,6 +907,111 @@ function updateMonkeyMode(timestamp) {
     drawEnemyBirds();
 }
 
+// Initialize ping pong mode
+function initPongMode() {
+    paddle.width = 80;
+    paddle.height = 15;
+    paddle.x = canvas.width / 2 - paddle.width / 2;
+    paddle.y = canvas.height - 50;
+
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 2;
+    ball.speedX = (Math.random() > 0.5 ? 1 : -1) * 5;
+    ball.speedY = -5;
+    ball.radius = 12;
+
+    pongScore = 0;
+}
+
+// Update ping pong mode
+function updatePongMode() {
+    // Move paddle with movement controls
+    if (movingLeft && paddle.x > 0) {
+        paddle.x -= 8;
+    }
+    if (movingRight && paddle.x < canvas.width - paddle.width) {
+        paddle.x += 8;
+    }
+
+    // Update ball position
+    ball.x += ball.speedX;
+    ball.y += ball.speedY;
+
+    // Ball collision with walls
+    if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+        ball.speedX *= -1;
+        playSound('flap');
+    }
+
+    // Ball collision with top
+    if (ball.y - ball.radius < 0) {
+        ball.speedY *= -1;
+        playSound('flap');
+    }
+
+    // Ball collision with paddle
+    if (ball.y + ball.radius > paddle.y &&
+        ball.y - ball.radius < paddle.y + paddle.height &&
+        ball.x > paddle.x &&
+        ball.x < paddle.x + paddle.width) {
+        ball.speedY *= -1;
+        ball.y = paddle.y - ball.radius;
+        // Add spin based on where ball hits paddle
+        const hitPos = (ball.x - paddle.x) / paddle.width;
+        ball.speedX = (hitPos - 0.5) * 10;
+        pongScore++;
+        score++;
+        scoreDisplay.textContent = score;
+        playSound('score');
+        createMemePopup(ball.x, ball.y, '+1', false, true);
+
+        // Speed up ball slightly
+        ball.speedY *= 1.05;
+    }
+
+    // Ball falls below paddle - GAME OVER
+    if (ball.y - ball.radius > canvas.height) {
+        createMemePopup(200, 300, 'PONG FAILED!', true, true);
+        gameOver();
+        return;
+    }
+
+    // Draw ping pong elements
+    drawPongMode();
+}
+
+// Draw ping pong mode
+function drawPongMode() {
+    // Draw paddle (rainbow!)
+    const paddleGradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x + paddle.width, paddle.y);
+    paddleGradient.addColorStop(0, `hsl(${rainbowHue}, 100%, 50%)`);
+    paddleGradient.addColorStop(0.5, `hsl(${(rainbowHue + 60) % 360}, 100%, 50%)`);
+    paddleGradient.addColorStop(1, `hsl(${(rainbowHue + 120) % 360}, 100%, 50%)`);
+    ctx.fillStyle = paddleGradient;
+    ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(paddle.x, paddle.y, paddle.width, paddle.height);
+
+    // Draw ball (glowing)
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffff00';
+    ctx.fill();
+    ctx.strokeStyle = '#ff8800';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Draw "PONG MODE" text
+    ctx.fillStyle = '#ff00ff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('PONG MODE!', canvas.width / 2, 80);
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('Hits: ' + pongScore, canvas.width / 2, 105);
+}
+
 // Draw pipe with meme text
 function drawPipe(pipe) {
     const gradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + pipeWidth, 0);
@@ -945,9 +1090,18 @@ function gameLoop(timestamp) {
     drawBackground();
 
     if (gameState === 'playing') {
-        if (monkeyMode) {
+        if (pongMode) {
+            // PING PONG MODE!
+            updatePongMode();
+        } else if (monkeyMode) {
             // SHOOTER MODE - monkey on ground, shoot birds!
-            bird.x = canvas.width / 2 - bird.width / 2; // Center monkey
+            // Move monkey left/right
+            if (movingLeft && bird.x > 10) {
+                bird.x -= monkeySpeed;
+            }
+            if (movingRight && bird.x < canvas.width - bird.width - 10) {
+                bird.x += monkeySpeed;
+            }
             bird.y = canvas.height - 80; // Keep monkey on ground
             bird.velocity = 0;
             bird.rotation = 0;
@@ -1043,6 +1197,24 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         flap();
     }
+    // Arrow keys for movement in shooter/pong mode
+    if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        movingLeft = true;
+    }
+    if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        movingRight = true;
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowLeft') {
+        movingLeft = false;
+    }
+    if (e.code === 'ArrowRight') {
+        movingRight = false;
+    }
 });
 
 canvas.addEventListener('click', flap);
@@ -1098,6 +1270,54 @@ document.addEventListener('keydown', (e) => {
             nextMap();
         }
     }
+});
+
+// Movement button controls
+const moveLeftBtn = document.getElementById('move-left');
+const moveRightBtn = document.getElementById('move-right');
+
+// Mouse events
+moveLeftBtn.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    movingLeft = true;
+});
+moveLeftBtn.addEventListener('mouseup', () => {
+    movingLeft = false;
+});
+moveLeftBtn.addEventListener('mouseleave', () => {
+    movingLeft = false;
+});
+
+moveRightBtn.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    movingRight = true;
+});
+moveRightBtn.addEventListener('mouseup', () => {
+    movingRight = false;
+});
+moveRightBtn.addEventListener('mouseleave', () => {
+    movingRight = false;
+});
+
+// Touch events for mobile
+moveLeftBtn.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    movingLeft = true;
+}, { passive: false });
+moveLeftBtn.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    movingLeft = false;
+});
+
+moveRightBtn.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    movingRight = true;
+}, { passive: false });
+moveRightBtn.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    movingRight = false;
 });
 
 // Start game loop

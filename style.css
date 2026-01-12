@@ -154,6 +154,38 @@ body {
     display: none !important;
 }
 
+/* Movement buttons for shooter mode */
+.move-btn {
+    position: absolute;
+    bottom: 50px;
+    width: 70px;
+    height: 70px;
+    background: rgba(255, 0, 255, 0.6);
+    border: 3px solid #ff00ff;
+    border-radius: 50%;
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 25;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.move-btn:active {
+    background: rgba(255, 0, 255, 0.9);
+    transform: scale(0.95);
+}
+
+#move-left {
+    left: 10px;
+}
+
+#move-right {
+    right: 10px;
+}
+
 /* Meme popup styles */
 #meme-popup-container {
     position: absolute;
