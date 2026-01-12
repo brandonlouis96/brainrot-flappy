@@ -675,15 +675,44 @@ function shoot() {
 
 // Spawn enemy bird (from sky in shooter mode!)
 function spawnEnemyBird() {
-    // Birds fly across the sky from different directions
-    const fromLeft = Math.random() > 0.5;
-    enemyBirds.push({
-        x: fromLeft ? -50 : canvas.width + 50,
-        y: 50 + Math.random() * 250, // Upper portion of screen
-        speed: (2 + Math.random() * 3) * (fromLeft ? 1 : -1),
-        size: 30 + Math.random() * 20,
-        hue: Math.random() * 360
-    });
+    const birdType = Math.random();
+
+    if (birdType < 0.3) {
+        // DIVER BIRD - comes from top and dives at monkey!
+        enemyBirds.push({
+            x: 50 + Math.random() * (canvas.width - 100),
+            y: -50,
+            speedX: (Math.random() - 0.5) * 2,
+            speedY: 3 + Math.random() * 2, // Moves DOWN
+            size: 35,
+            hue: 0, // Red - danger!
+            type: 'diver'
+        });
+    } else if (birdType < 0.5) {
+        // BOMBER BIRD - targets the monkey directly!
+        const targetX = bird.x + bird.width / 2;
+        enemyBirds.push({
+            x: targetX + (Math.random() - 0.5) * 100,
+            y: -50,
+            speedX: 0,
+            speedY: 4 + Math.random() * 3, // Fast dive!
+            size: 40,
+            hue: 300, // Purple - extra danger!
+            type: 'bomber'
+        });
+    } else {
+        // Regular bird - flies across
+        const fromLeft = Math.random() > 0.5;
+        enemyBirds.push({
+            x: fromLeft ? -50 : canvas.width + 50,
+            y: 50 + Math.random() * 200,
+            speedX: (3 + Math.random() * 3) * (fromLeft ? 1 : -1),
+            speedY: 0,
+            size: 30 + Math.random() * 15,
+            hue: Math.random() * 360,
+            type: 'normal'
+        });
+    }
 }
 
 // Draw enemy birds
@@ -692,14 +721,26 @@ function drawEnemyBirds() {
         ctx.save();
         ctx.translate(enemy.x, enemy.y);
 
+        // Rotate divers/bombers to face downward
+        if (enemy.type === 'diver' || enemy.type === 'bomber') {
+            ctx.rotate(Math.PI / 2); // Face down
+        }
+
         // Evil bird body
-        ctx.fillStyle = `hsl(${enemy.hue}, 70%, 40%)`;
+        ctx.fillStyle = `hsl(${enemy.hue}, 80%, ${enemy.type === 'bomber' ? 30 : 40}%)`;
         ctx.beginPath();
         ctx.ellipse(0, 0, enemy.size, enemy.size * 0.7, 0, 0, Math.PI * 2);
         ctx.fill();
 
+        // Danger outline for divers/bombers
+        if (enemy.type === 'diver' || enemy.type === 'bomber') {
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
         // Angry eyes
-        ctx.fillStyle = 'red';
+        ctx.fillStyle = enemy.type === 'bomber' ? '#ffff00' : 'red';
         ctx.beginPath();
         ctx.arc(-5, -3, 5, 0, Math.PI * 2);
         ctx.fill();
@@ -716,6 +757,14 @@ function drawEnemyBirds() {
         ctx.lineTo(-enemy.size + 5, 6);
         ctx.closePath();
         ctx.fill();
+
+        // Warning symbol on bombers
+        if (enemy.type === 'bomber') {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', 0, 5);
+        }
 
         ctx.restore();
     });
@@ -739,8 +788,12 @@ function drawBullets() {
 function updateMonkeyMode(timestamp) {
     if (!monkeyMode) return;
 
-    // Spawn enemy birds more frequently
-    if (timestamp - lastEnemySpawn > 1000) {
+    // Calculate difficulty - spawns faster as score increases!
+    const timeSinceMonkeyMode = score - 10;
+    const spawnRate = Math.max(400, 1000 - timeSinceMonkeyMode * 30); // Gets faster!
+
+    // Spawn enemy birds
+    if (timestamp - lastEnemySpawn > spawnRate) {
         spawnEnemyBird();
         lastEnemySpawn = timestamp;
     }
@@ -755,11 +808,32 @@ function updateMonkeyMode(timestamp) {
         }
     }
 
-    // Update enemy birds (fly horizontally across sky)
+    // Monkey hitbox for collision
+    const monkeyX = bird.x + bird.width / 2;
+    const monkeyY = bird.y;
+    const monkeyRadius = 35;
+
+    // Update enemy birds
     for (let i = enemyBirds.length - 1; i >= 0; i--) {
-        enemyBirds[i].x += enemyBirds[i].speed;
-        // Remove if off screen either side
-        if (enemyBirds[i].x < -100 || enemyBirds[i].x > canvas.width + 100) {
+        const enemy = enemyBirds[i];
+
+        // Move bird
+        enemy.x += enemy.speedX || 0;
+        enemy.y += enemy.speedY || 0;
+
+        // CHECK IF BIRD HITS MONKEY - GAME OVER!
+        const dx = enemy.x - monkeyX;
+        const dy = enemy.y - monkeyY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < enemy.size + monkeyRadius) {
+            // HIT! Game over!
+            createMemePopup(enemy.x, enemy.y, 'SKILL ISSUE!', true, true);
+            gameOver();
+            return;
+        }
+
+        // Remove if off screen
+        if (enemy.x < -100 || enemy.x > canvas.width + 100 || enemy.y > canvas.height + 50) {
             enemyBirds.splice(i, 1);
         }
     }
