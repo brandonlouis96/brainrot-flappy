@@ -180,12 +180,13 @@ let nextHarrySoundScore = 3; // Trigger every 3 pipes
 const deathSound = new Audio('sounds/Fahhh.mp3');
 deathSound.preload = 'auto';
 deathSound.volume = 1.0; // Max volume for death sound
+harrySound.volume = 1.0; // Max volume for 6-7 sound
 
 // Background music
 const bgMusic = new Audio('sounds/bgm.mp3');
 bgMusic.preload = 'auto';
 bgMusic.loop = true;
-bgMusic.volume = 0.3; // Lower BGM so sound effects stand out
+bgMusic.volume = 0.15; // Much lower BGM so sound effects stand out
 
 // Play the 6-7 Harry sound
 function playHarrySound() {
